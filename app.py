@@ -140,6 +140,20 @@ elif page == "Entrer un mot-clé":
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la récupération des locations : {e}")
 
-    # Afficher la location sélectionnée
+    # Afficher la location sélectionnée et lancer la recherche SERP
     if 'selected_location' in st.session_state:
         st.write(f"Location sélectionnée : {st.session_state['selected_location']}")
+        if keyword_input and valueserp_api_key:
+            search_url = f"https://api.valueserp.com/search?api_key={valueserp_api_key}&q={keyword_input}&location={st.session_state['selected_location']}&num=10"
+            try:
+                search_response = requests.get(search_url)
+                search_response.raise_for_status()
+                search_results = search_response.json().get("organic_results", [])
+                if search_results:
+                    st.subheader("Résultats de la recherche SERP")
+                    for result in search_results:
+                        st.write(f"- [{result['title']}]({result['link']})")
+                else:
+                    st.warning("Aucun résultat trouvé.")
+            except requests.RequestException as e:
+                st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
