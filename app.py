@@ -1,12 +1,3 @@
-import streamlit as st
-import yake
-import nltk
-from nltk.corpus import stopwords
-import pandas as pd
-import os
-import textrazor
-import requests
-
 # Initialisation de Streamlit avec plusieurs pages
 st.set_page_config(page_title="SEO Entity Finder", layout="wide")
 
