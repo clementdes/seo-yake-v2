@@ -41,6 +41,38 @@ except LookupError:
     stopword_list = custom_stopwords
     st.warning("Impossible de charger les stopwords NLTK. Utilisation des stopwords personnalisés uniquement.")
 
+# Fonction pour analyser une URL avec TextRazor
+def analyze_url_with_textrazor(url, api_key):
+    if not api_key:
+        st.error("Clé API TextRazor manquante.")
+        return None
+    textrazor.api_key = api_key
+    client = textrazor.TextRazor(extractors=["entities", "topics"])
+    client.set_cleanup_mode("cleanHTML")
+    client.set_cleanup_return_cleaned(True)
+    try:
+        response = client.analyze_url(url)
+        if response.ok:
+            return response.cleaned_text
+        else:
+            st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {response.error}")
+            return None
+    except textrazor.TextRazorAnalysisException as e:
+        st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {e}")
+        return None
+
+# Fonction pour extraire les mots-clés avec YAKE
+def extract_keywords_with_yake(text, stopword_list, max_ngram_size=3, deduplication_threshold=0.9, num_of_keywords=100):
+    kw_extractor = yake.KeywordExtractor(
+        lan="fr",
+        n=max_ngram_size,
+        dedupLim=deduplication_threshold,
+        top=num_of_keywords,
+        features=None,
+        stopwords=stopword_list
+    )
+    return kw_extractor.extract_keywords(text)
+
 # Navigation des pages
 page = st.sidebar.radio("Navigation", ["Coller un texte", "Coller une URL", "Entrer un mot-clé"]) 
 
@@ -54,18 +86,6 @@ if page == "Coller un texte":
     # Bouton pour analyser le texte
     if st.button("Analyser le texte avec YAKE"):
         if text_input.strip():
-            # Fonction pour extraire les mots-clés avec YAKE
-            def extract_keywords_with_yake(text, stopword_list, max_ngram_size=3, deduplication_threshold=0.9, num_of_keywords=100):
-                kw_extractor = yake.KeywordExtractor(
-                    lan="fr",
-                    n=max_ngram_size,
-                    dedupLim=deduplication_threshold,
-                    top=num_of_keywords,
-                    features=None,
-                    stopwords=stopword_list
-                )
-                return kw_extractor.extract_keywords(text)
-            
             keywords = extract_keywords_with_yake(text_input, stopword_list)
             data = {
                 "Mot Yake": [kw for kw, score in keywords],
@@ -83,26 +103,6 @@ elif page == "Coller une URL":
     # Champ de saisie pour l'URL
     url_input = st.text_input("Entrez l'URL ici :")
     textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
-
-    # Fonction pour analyser une URL avec TextRazor
-    def analyze_url_with_textrazor(url, api_key):
-        if not api_key:
-            st.error("Clé API TextRazor manquante.")
-            return None
-        textrazor.api_key = api_key
-        client = textrazor.TextRazor(extractors=["entities", "topics"])
-        client.set_cleanup_mode("cleanHTML")
-        client.set_cleanup_return_cleaned(True)
-        try:
-            response = client.analyze_url(url)
-            if response.ok:
-                return response.cleaned_text
-            else:
-                st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {response.error}")
-                return None
-        except textrazor.TextRazorAnalysisException as e:
-            st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {e}")
-            return None
 
     # Bouton pour analyser l'URL
     if st.button("Analyser l'URL"):
