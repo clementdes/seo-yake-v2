@@ -106,7 +106,8 @@ elif page == "Coller une URL":
     st.title("Analyse de contenu via URL avec TextRazor")
     
     # Champ de saisie pour l'URL
-    textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
+    
+textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
 
     # Bouton pour analyser l'URL
     if st.button("Analyser l'URL"):
