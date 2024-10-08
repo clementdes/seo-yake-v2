@@ -79,12 +79,12 @@ def convert_df_to_csv(df):
     return df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
 
 # Navigation des pages
-page = st.sidebar.radio("Navigation", ["Coller un texte", "Coller une URL", "Entrer un mot-clé"]) 
+page = st.sidebar.radio("Navigation", ["Coller un texte", "Coller une URL", "Entrer un mot-clé"])
 
 # Page : Coller un texte
 if page == "Coller un texte":
     st.title("Extraction de mots-clés à partir d'un texte avec YAKE")
-    
+
     # Champ de texte pour l'entrée utilisateur
     text_input = st.text_area("Entrez le texte ici :")
 
@@ -104,18 +104,25 @@ if page == "Coller un texte":
 # Page : Coller une URL
 elif page == "Coller une URL":
     st.title("Analyse de contenu via URL avec TextRazor")
-    
-    # Champ de saisie pour l'URL
-    
-textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
 
-    # Bouton pour analyser l'URL    if st.button("Analyser l'URL"):
+    # Champ de saisie pour l'URL
+    url_input = st.text_input("Entrez l'URL ici :")
+    textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
+
+    # Bouton pour analyser l'URL
+    if st.button("Analyser l'URL"):
         if url_input.strip():
             analyzed_text = analyze_url_with_textrazor(url_input, textrazor_api_key)
             if analyzed_text:
                 st.subheader("Texte analysé")
                 st.write(analyzed_text)
-textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")# Champs dans la sidebar
+
+# Page : Entrer un mot-clé
+elif page == "Entrer un mot-clé":
+    st.title("Recherche des SERP avec ValueSERP")
+
+    # Champs dans la sidebar
+    textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
     valueserp_api_key = st.sidebar.text_input("Entrez votre clé API ValueSERP", type="password")
     keyword_input = st.text_input("Entrez un mot-clé pour la recherche ValueSERP")
     location_query = st.text_input("Entrez une localisation pour les SERP")
