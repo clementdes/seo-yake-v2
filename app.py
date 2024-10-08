@@ -106,18 +106,16 @@ elif page == "Coller une URL":
     st.title("Analyse de contenu via URL avec TextRazor")
     
     # Champ de saisie pour l'URL
+    
 textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
 
-    # Bouton pour analyser l'URL
-    if st.button("Analyser l'URL"):
+    # Bouton pour analyser l'URL    if st.button("Analyser l'URL"):
         if url_input.strip():
             analyzed_text = analyze_url_with_textrazor(url_input, textrazor_api_key)
             if analyzed_text:
                 st.subheader("Texte analysé")
                 st.write(analyzed_text)
-
-     textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
-# Champs dans la sidebar
+textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")# Champs dans la sidebar
     valueserp_api_key = st.sidebar.text_input("Entrez votre clé API ValueSERP", type="password")
     keyword_input = st.text_input("Entrez un mot-clé pour la recherche ValueSERP")
     location_query = st.text_input("Entrez une localisation pour les SERP")
