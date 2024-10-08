@@ -117,11 +117,8 @@ elif page == "Coller une URL":
                 st.subheader("Texte analysé")
                 st.write(analyzed_text)
 
-# Page : Entrer un mot-clé
-elif page == "Entrer un mot-clé":
-    st.title("Recherche des SERP avec ValueSERP")
-    
-    # Champs dans la sidebar
+    textrazor_api_key = st.sidebar.text_input("Entrez votre clé API TextRazor", type="password")
+# Champs dans la sidebar
     valueserp_api_key = st.sidebar.text_input("Entrez votre clé API ValueSERP", type="password")
     keyword_input = st.text_input("Entrez un mot-clé pour la recherche ValueSERP")
     location_query = st.text_input("Entrez une localisation pour les SERP")
