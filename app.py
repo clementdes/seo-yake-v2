@@ -73,6 +73,11 @@ def extract_keywords_with_yake(text, stopword_list, max_ngram_size=3, deduplicat
     )
     return kw_extractor.extract_keywords(text)
 
+# Fonction pour convertir le DataFrame en CSV
+@st.cache_data
+def convert_df_to_csv(df):
+    return df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+
 # Navigation des pages
 page = st.sidebar.radio("Navigation", ["Coller un texte", "Coller une URL", "Entrer un mot-clé"]) 
 
@@ -120,6 +125,7 @@ elif page == "Entrer un mot-clé":
     valueserp_api_key = st.sidebar.text_input("Entrez votre clé API ValueSERP", type="password")
     keyword_input = st.text_input("Entrez un mot-clé pour la recherche ValueSERP")
     location_query = st.text_input("Entrez une localisation pour les SERP")
+    user_url = st.sidebar.text_input("Votre URL")
 
     # Bouton pour rechercher les locations avec l'API ValueSERP
     if st.button("Rechercher les locations"):
@@ -140,20 +146,122 @@ elif page == "Entrer un mot-clé":
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la récupération des locations : {e}")
 
-    # Afficher la location sélectionnée et lancer la recherche SERP
-    if 'selected_location' in st.session_state:
-        st.write(f"Location sélectionnée : {st.session_state['selected_location']}")
-        if keyword_input and valueserp_api_key:
-            search_url = f"https://api.valueserp.com/search?api_key={valueserp_api_key}&q={keyword_input}&location={st.session_state['selected_location']}&num=10"
+    # Recherche ValueSERP avec le mot-clé et la location sélectionnée
+    if keyword_input and 'selected_location' in st.session_state:
+        if not valueserp_api_key:
+            st.error("Clé API ValueSERP manquante.")
+        else:
+            search_url = f"https://api.valueserp.com/search?api_key={valueserp_api_key}&q={keyword_input}&location={st.session_state['selected_location']}&num=30"
             try:
                 search_response = requests.get(search_url)
                 search_response.raise_for_status()
-                search_results = search_response.json().get("organic_results", [])
-                if search_results:
-                    st.subheader("Résultats de la recherche SERP")
-                    for result in search_results:
-                        st.write(f"- [{result['title']}]({result['link']})")
-                else:
-                    st.warning("Aucun résultat trouvé.")
+                search_results = search_response.json()
+
+                # Extraire les URLs des résultats organiques
+                organic_results = search_results.get('organic_results', [])
+                urls = [result['link'] for result in organic_results]
+                st.subheader("URLs des résultats organiques")
+                st.write(urls[:30])  # Afficher uniquement les 30 premières URLs
+
+                # Vérifier si l'URL de l'utilisateur est dans le top 30
+                if user_url in urls[:30]:
+                    rank = urls.index(user_url) + 1
+                    st.write(f"Votre URL est classée #{rank} dans les résultats de Google.")
+
+                # Analyser chaque URL avec TextRazor et extraire les mots-clés avec YAKE
+                keyword_data = {}
+                combined_text = ""
+                for rank, result in enumerate(organic_results[:10]):  # Limiter à 10 URLs
+                    url = result['link']
+                    text = analyze_url_with_textrazor(url, textrazor_api_key)
+                    if text:
+                        combined_text += text + " "
+                        keywords = extract_keywords_with_yake(text, stopword_list)
+                        for kw, score in keywords:
+                            if kw not in keyword_data:
+                                keyword_data[kw] = {"total_occurrence": 0, "max_occurrence": 0, "max_url": "", "score": score, "ranking": rank, "occurrences": [0]*11}
+                            occurrence = text.lower().count(kw.lower())
+                            keyword_data[kw]["total_occurrence"] += occurrence
+                            keyword_data[kw]["occurrences"][rank] = occurrence
+                            if occurrence > keyword_data[kw]["max_occurrence"]:
+                                keyword_data[kw]["max_occurrence"] = occurrence
+                                keyword_data[kw]["max_url"] = url
+
+                # Analyser l'URL de l'utilisateur avec TextRazor et extraire les mots-clés avec YAKE
+                if user_url:
+                    user_text = analyze_url_with_textrazor(user_url, textrazor_api_key)
+                    if user_text:
+                        combined_text += user_text + " "
+                        user_keywords = extract_keywords_with_yake(user_text, stopword_list)
+                        for kw, score in user_keywords:
+                            if kw not in keyword_data:
+                                keyword_data[kw] = {"total_occurrence": 0, "max_occurrence": 0, "max_url": "", "score": score, "ranking": None, "occurrences": [0]*11}
+                            occurrence = user_text.lower().count(kw.lower())
+                            keyword_data[kw]["total_occurrence"] += occurrence
+                            keyword_data[kw]["occurrences"][10] = occurrence  # Index 10 pour "Votre URL"
+                            if occurrence > keyword_data[kw]["max_occurrence"]:
+                                keyword_data[kw]["max_occurrence"] = occurrence
+                                keyword_data[kw]["max_url"] = user_url
+
+                # Convertir les données des mots-clés en DataFrame
+                data = []
+                for kw, values in keyword_data.items():
+                    mean_top_3 = sum(values["occurrences"][:3]) / 3
+                    data.append([kw, values["total_occurrence"], values["max_occurrence"], values["max_url"], values["score"], values["ranking"], mean_top_3])
+                df = pd.DataFrame(data, columns=["Mot Yake", "Nombre d'occurrences total", "Nombre d'occurrences max", "URL avec Occurrence Max", "Score", "Ranking", "Moyenne d'occurrences sur le top 3"])
+
+                # Trier le DataFrame par nombre d'occurrences total (ordre descendant)
+                df = df.sort_values(by=["Nombre d'occurrences total"], ascending=False)
+
+                # Stocker les résultats dans st.session_state
+                st.session_state['df'] = df
+
+                # Afficher le tableau
+                st.subheader("Mots-clés extraits des résultats ValueSERP")
+                st.subheader("Pour rappel : The lower the score, the more relevant the keyword is.")
+                st.dataframe(df)
+
+                # Convertir le DataFrame en CSV
+                csv = convert_df_to_csv(df)
+
+                # Nom du fichier CSV
+                file_name = "mots_cles_yake_valueserp.csv"
+
+                # Bouton de téléchargement
+                st.download_button(
+                    label="Télécharger le tableau en CSV",
+                    data=csv,
+                    file_name=file_name,
+                    mime='text/csv',
+                )
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
+
+    # Affichage des résultats précédemment calculés
+    if 'df' in st.session_state:
+        df = st.session_state['df']
+
+        # Afficher le tableau
+        st.subheader("Mots-clés extraits")
+        st.subheader("Pour rappel : The lower the score, the more relevant the keyword is.")
+        st.dataframe(df)
+
+        # Afficher les mots-clés sous forme de liste à virgule
+        st.subheader("Mots-clés extraits (liste à virgule)")
+        st.write(", ".join(df["Mot Yake"].tolist()))
+
+        # Convertir le DataFrame en CSV
+        csv = convert_df_to_csv(df)
+
+        # Nom du fichier CSV
+        file_name = "mots_cles_yake.csv"
+
+        # Bouton de téléchargement
+        st.download_button(
+            label="Télécharger le tableau en CSV",
+            data=csv,
+            file_name=file_name,
+            mime='text/csv',
+        )
+    else:
+        st.warning("Veuillez entrer un texte ou une URL pour extraire les mots-clés.")
