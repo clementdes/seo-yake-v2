@@ -45,7 +45,7 @@ except LookupError:
 def analyze_url_with_textrazor(url, api_key):
     if not api_key:
         st.error("Clé API TextRazor manquante.")
-        return None, None
+        return None, None, None
     textrazor.api_key = api_key
     client = textrazor.TextRazor(extractors=["entities", "topics"])
     client.set_cleanup_mode("cleanHTML")
@@ -54,13 +54,14 @@ def analyze_url_with_textrazor(url, api_key):
         response = client.analyze_url(url)
         if response.ok:
             topics = [topic.label for topic in response.topics()]
-            return response.cleaned_text, topics
+            entities = [(entity.id, entity.count) for entity in response.entities()]
+            return response.cleaned_text, topics, entities
         else:
             st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {response.error}")
-            return None, None
+            return None, None, None
     except textrazor.TextRazorAnalysisException as e:
         st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {e}")
-        return None, None
+        return None, None, None
 
 # Fonction pour extraire les mots-clés avec YAKE
 def extract_keywords_with_yake(text, stopword_list, max_ngram_size=3, deduplication_threshold=0.9, num_of_keywords=100):
@@ -113,7 +114,7 @@ elif page == "Coller une URL":
     # Bouton pour analyser l'URL
     if st.button("Analyser l'URL"):
         if url_input.strip():
-            analyzed_text, topics = analyze_url_with_textrazor(url_input, textrazor_api_key)
+            analyzed_text, topics, entities = analyze_url_with_textrazor(url_input, textrazor_api_key)
             if analyzed_text:
                 st.subheader("Texte analysé")
                 st.write(analyzed_text)
@@ -140,6 +141,28 @@ elif page == "Coller une URL":
                         label="Télécharger le tableau des topics en CSV",
                         data=topics_csv,
                         file_name=topics_file_name,
+                        mime='text/csv',
+                    )
+
+                # Afficher les entités extraites par TextRazor
+                if entities:
+                    st.subheader("Entités extraites par TextRazor")
+                    entities_data = [{"URL": url_input, "Entité": entity[0], "Nombre d'occurrences": entity[1]} for entity in entities]
+                    entities_df = pd.DataFrame(entities_data)
+
+                    # Afficher le tableau des entités
+                    st.subheader("Tableau des Entités TextRazor")
+                    st.dataframe(entities_df)
+
+                    # Convertir le DataFrame des entités en CSV
+                    entities_csv = convert_df_to_csv(entities_df)
+                    entities_file_name = "entities_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau des entités
+                    st.download_button(
+                        label="Télécharger le tableau des entités en CSV",
+                        data=entities_csv,
+                        file_name=entities_file_name,
                         mime='text/csv',
                     )
 
@@ -199,9 +222,11 @@ elif page == "Entrer un mot-clé":
                 keyword_data = {}
                 combined_text = ""
                 topics_data = []
+                entities_data = []
+                entity_summary = {}
                 for rank, result in enumerate(organic_results[:10]):  # Limiter à 10 URLs
                     url = result['link']
-                    text, topics = analyze_url_with_textrazor(url, textrazor_api_key)
+                    text, topics, entities = analyze_url_with_textrazor(url, textrazor_api_key)
                     if text:
                         combined_text += text + " "
                         keywords = extract_keywords_with_yake(text, stopword_list)
@@ -216,10 +241,20 @@ elif page == "Entrer un mot-clé":
                                 keyword_data[kw]["max_url"] = url
                         if topics:
                             topics_data.append({"Ranking": rank + 1, "URL": url, "Topics": ", ".join(topics)})
+                        if entities:
+                            for entity in entities:
+                                entities_data.append({"URL": url, "Entité": entity[0], "Nombre d'occurrences": entity[1]})
+                                if entity[0] not in entity_summary:
+                                    entity_summary[entity[0]] = {"total_occurrence": 0, "max_occurrence": 0, "max_url": "", "ranking": rank}
+                                entity_summary[entity[0]]["total_occurrence"] += entity[1]
+                                if entity[1] > entity_summary[entity[0]]['max_occurrence']:
+                                    entity_summary[entity[0]]['max_occurrence'] = entity[1]
+                                    entity_summary[entity[0]]['max_url'] = url
+                                    entity_summary[entity[0]]['ranking'] = rank + 1
 
                 # Analyser l'URL de l'utilisateur avec TextRazor et extraire les mots-clés avec YAKE
                 if user_url:
-                    user_text, user_topics = analyze_url_with_textrazor(user_url, textrazor_api_key)
+                    user_text, user_topics, user_entities = analyze_url_with_textrazor(user_url, textrazor_api_key)
                     if user_text:
                         combined_text += user_text + " "
                         user_keywords = extract_keywords_with_yake(user_text, stopword_list)
@@ -234,6 +269,16 @@ elif page == "Entrer un mot-clé":
                                 keyword_data[kw]["max_url"] = user_url
                         if user_topics:
                             topics_data.append({"Ranking": "Votre URL", "URL": user_url, "Topics": ", ".join(user_topics)})
+                        if user_entities:
+                            for entity in user_entities:
+                                entities_data.append({"URL": user_url, "Entité": entity[0], "Nombre d'occurrences": entity[1]})
+                                if entity[0] not in entity_summary:
+                                    entity_summary[entity[0]] = {"total_occurrence": 0, "max_occurrence": 0, "max_url": "", "ranking": "Votre URL"}
+                                entity_summary[entity[0]]["total_occurrence"] += entity[1]
+                                if entity[1] > entity_summary[entity[0]]['max_occurrence']:
+                                    entity_summary[entity[0]]['max_occurrence'] = entity[1]
+                                    entity_summary[entity[0]]['max_url'] = user_url
+                                    entity_summary[entity[0]]['ranking'] = "Votre URL"
 
                 # Convertir les données des mots-clés en DataFrame
                 data = []
@@ -249,7 +294,7 @@ elif page == "Entrer un mot-clé":
                 st.session_state['df'] = df
 
                 # Afficher le tableau
-                st.subheader("Mots-clés extraits des résultats ValueSERP")
+                st.subheader("Mots-clés YAKE extraits des résultats ValueSERP")
                 st.subheader("Pour rappel : The lower the score, the more relevant the keyword is.")
                 st.dataframe(df)
 
@@ -285,9 +330,56 @@ elif page == "Entrer un mot-clé":
                         mime='text/csv',
                     )
 
+                # Convertir les données des entités en DataFrame
+                if entities_data:
+                    entities_df = pd.DataFrame(entities_data)
+                    st.subheader("Tableau des Entités TextRazor par URL")
+                    st.dataframe(entities_df)
+
+                    # Convertir le DataFrame des entités en CSV
+                    entities_csv = convert_df_to_csv(entities_df)
+                    entities_file_name = "entities_textrazor_by_url.csv"
+
+                    # Bouton de téléchargement pour le tableau des entités
+                    st.download_button(
+                        label="Télécharger le tableau des entités par URL en CSV",
+                        data=entities_csv,
+                        file_name=entities_file_name,
+                        mime='text/csv',
+                    )
+
+                # Créer un tableau récapitulatif des entités
+                if entity_summary:
+                    summary_data = []
+                    for entity, values in entity_summary.items():
+                        summary_data.append({
+                            "Entité": entity,
+                            "Nombre d'occurrences total": values["total_occurrence"],
+                            "Nombre d'occurrences max": values["max_occurrence"],
+                            "URL ayant le plus d'occurrences": values["max_url"],
+                            "Ranking de l'URL": values["ranking"]
+                        })
+                    entity_summary_df = pd.DataFrame(summary_data)
+                    st.subheader("Tableau récapitulatif des Entités TextRazor")
+                    st.dataframe(entity_summary_df)
+
+                    # Convertir le DataFrame récapitulatif des entités en CSV
+                    entity_summary_csv = convert_df_to_csv(entity_summary_df)
+                    entity_summary_file_name = "entities_summary_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau récapitulatif des entités
+                    st.download_button(
+                        label="Télécharger le tableau récapitulatif des entités en CSV",
+                        data=entity_summary_csv,
+                        file_name=entity_summary_file_name,
+                        mime='text/csv',
+                    )
+
                 # Afficher les mots-clés sous forme de liste à virgule
                 st.subheader("Mots-clés extraits (liste à virgule)")
                 st.write(", ".join(df["Mot Yake"].tolist()))
 
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
+        else:
+            st.warning("Veuillez entrer un texte ou une URL pour extraire les mots-clés.")
