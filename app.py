@@ -291,5 +291,3 @@ elif page == "Entrer un mot-clé":
 
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
-        else:
-            st.warning("Veuillez entrer un texte ou une URL pour extraire les mots-clés.")
