@@ -45,7 +45,7 @@ except LookupError:
 def analyze_url_with_textrazor(url, api_key):
     if not api_key:
         st.error("Clé API TextRazor manquante.")
-        return None
+        return None, None
     textrazor.api_key = api_key
     client = textrazor.TextRazor(extractors=["entities", "topics"])
     client.set_cleanup_mode("cleanHTML")
@@ -53,13 +53,14 @@ def analyze_url_with_textrazor(url, api_key):
     try:
         response = client.analyze_url(url)
         if response.ok:
-            return response.cleaned_text
+            topics = [topic.label for topic in response.topics()]
+            return response.cleaned_text, topics
         else:
             st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {response.error}")
-            return None
+            return None, None
     except textrazor.TextRazorAnalysisException as e:
         st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {e}")
-        return None
+        return None, None
 
 # Fonction pour extraire les mots-clés avec YAKE
 def extract_keywords_with_yake(text, stopword_list, max_ngram_size=3, deduplication_threshold=0.9, num_of_keywords=100):
@@ -112,10 +113,35 @@ elif page == "Coller une URL":
     # Bouton pour analyser l'URL
     if st.button("Analyser l'URL"):
         if url_input.strip():
-            analyzed_text = analyze_url_with_textrazor(url_input, textrazor_api_key)
+            analyzed_text, topics = analyze_url_with_textrazor(url_input, textrazor_api_key)
             if analyzed_text:
                 st.subheader("Texte analysé")
                 st.write(analyzed_text)
+
+                # Afficher les topics extraits par TextRazor
+                if topics:
+                    st.subheader("Topics extraits par TextRazor")
+                    st.write(", ".join(topics))
+
+                    # Créer un DataFrame pour les topics
+                    topics_data = [{"Ranking": 1, "URL": url_input, "Topics": ", ".join(topics)}]
+                    topics_df = pd.DataFrame(topics_data)
+
+                    # Afficher le tableau des topics
+                    st.subheader("Tableau des Topics TextRazor")
+                    st.dataframe(topics_df)
+
+                    # Convertir le DataFrame des topics en CSV
+                    topics_csv = convert_df_to_csv(topics_df)
+                    topics_file_name = "topics_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau des topics
+                    st.download_button(
+                        label="Télécharger le tableau des topics en CSV",
+                        data=topics_csv,
+                        file_name=topics_file_name,
+                        mime='text/csv',
+                    )
 
 # Page : Entrer un mot-clé
 elif page == "Entrer un mot-clé":
@@ -172,9 +198,10 @@ elif page == "Entrer un mot-clé":
                 # Analyser chaque URL avec TextRazor et extraire les mots-clés avec YAKE
                 keyword_data = {}
                 combined_text = ""
+                topics_data = []
                 for rank, result in enumerate(organic_results[:10]):  # Limiter à 10 URLs
                     url = result['link']
-                    text = analyze_url_with_textrazor(url, textrazor_api_key)
+                    text, topics = analyze_url_with_textrazor(url, textrazor_api_key)
                     if text:
                         combined_text += text + " "
                         keywords = extract_keywords_with_yake(text, stopword_list)
@@ -187,10 +214,12 @@ elif page == "Entrer un mot-clé":
                             if occurrence > keyword_data[kw]["max_occurrence"]:
                                 keyword_data[kw]["max_occurrence"] = occurrence
                                 keyword_data[kw]["max_url"] = url
+                        if topics:
+                            topics_data.append({"Ranking": rank + 1, "URL": url, "Topics": ", ".join(topics)})
 
                 # Analyser l'URL de l'utilisateur avec TextRazor et extraire les mots-clés avec YAKE
                 if user_url:
-                    user_text = analyze_url_with_textrazor(user_url, textrazor_api_key)
+                    user_text, user_topics = analyze_url_with_textrazor(user_url, textrazor_api_key)
                     if user_text:
                         combined_text += user_text + " "
                         user_keywords = extract_keywords_with_yake(user_text, stopword_list)
@@ -203,6 +232,8 @@ elif page == "Entrer un mot-clé":
                             if occurrence > keyword_data[kw]["max_occurrence"]:
                                 keyword_data[kw]["max_occurrence"] = occurrence
                                 keyword_data[kw]["max_url"] = user_url
+                        if user_topics:
+                            topics_data.append({"Ranking": "Votre URL", "URL": user_url, "Topics": ", ".join(user_topics)})
 
                 # Convertir les données des mots-clés en DataFrame
                 data = []
@@ -235,6 +266,24 @@ elif page == "Entrer un mot-clé":
                     file_name=file_name,
                     mime='text/csv',
                 )
+
+                # Convertir les données des topics en DataFrame
+                if topics_data:
+                    topics_df = pd.DataFrame(topics_data)
+                    st.subheader("Tableau des Topics TextRazor")
+                    st.dataframe(topics_df)
+
+                    # Convertir le DataFrame des topics en CSV
+                    topics_csv = convert_df_to_csv(topics_df)
+                    topics_file_name = "topics_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau des topics
+                    st.download_button(
+                        label="Télécharger le tableau des topics en CSV",
+                        data=topics_csv,
+                        file_name=topics_file_name,
+                        mime='text/csv',
+                    )
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
 
