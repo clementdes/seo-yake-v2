@@ -284,34 +284,12 @@ elif page == "Entrer un mot-clé":
                         file_name=topics_file_name,
                         mime='text/csv',
                     )
+
+                # Afficher les mots-clés sous forme de liste à virgule
+                st.subheader("Mots-clés extraits (liste à virgule)")
+                st.write(", ".join(df["Mot Yake"].tolist()))
+
             except requests.RequestException as e:
                 st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
-
-    # Affichage des résultats précédemment calculés
-    if 'df' in st.session_state:
-        df = st.session_state['df']
-
-        # Afficher le tableau
-        st.subheader("Mots-clés extraits")
-        st.subheader("Pour rappel : The lower the score, the more relevant the keyword is.")
-        st.dataframe(df)
-
-        # Afficher les mots-clés sous forme de liste à virgule
-        st.subheader("Mots-clés extraits (liste à virgule)")
-        st.write(", ".join(df["Mot Yake"].tolist()))
-
-        # Convertir le DataFrame en CSV
-        csv = convert_df_to_csv(df)
-
-        # Nom du fichier CSV
-        file_name = "mots_cles_yake.csv"
-
-        # Bouton de téléchargement
-        st.download_button(
-            label="Télécharger le tableau en CSV",
-            data=csv,
-            file_name=file_name,
-            mime='text/csv',
-        )
-    else:
-        st.warning("Veuillez entrer un texte ou une URL pour extraire les mots-clés.")
+        else:
+            st.warning("Veuillez entrer un texte ou une URL pour extraire les mots-clés.")
