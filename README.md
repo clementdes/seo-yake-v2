@@ -13,6 +13,8 @@ L'application est divisée en trois sections :
 2. **Coller une URL** : Analyse de contenu d'une URL via TextRazor et extraction de mots-clés.
 3. **Entrer un mot-clé** : Recherche des résultats Google SERP et analyse des URLs avec TextRazor et YAKE.
 
+Pour l'essayer en ligne : (https://seo-yake-v2.streamlit.app/)[https://seo-yake-v2.streamlit.app/]
+
 ## Installation
 
 ### Prérequis
