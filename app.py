@@ -54,7 +54,7 @@ def analyze_url_with_textrazor(url, api_key):
         response = client.analyze_url(url)
         if response.ok:
             topics = [topic.label for topic in response.topics()]
-            entities = [(entity.id, entity.matched_text.count(entity.id)) for entity in response.entities()]
+            entities = [(entity.id, entity.matched_text.count(entity.matched_text)) for entity in response.entities()]
             return response.cleaned_text, topics, entities
         else:
             st.error(f"Erreur lors de l'analyse de l'URL avec TextRazor : {response.error}")
@@ -276,4 +276,108 @@ elif page == "Entrer un mot-clé":
                                     entity_summary[entity[0]] = {"total_occurrence": 0, "max_occurrence": 0, "max_url": "", "ranking": "Votre URL"}
                                 entity_summary[entity[0]]["total_occurrence"] += entity[1]
                                 if entity[1] > entity_summary[entity[0]]['max_occurrence']:
-                                    entity_summary[entity[0]]['max_occurrence'] = entity
+                                    entity_summary[entity[0]]['max_occurrence'] = entity[1]
+                                    entity_summary[entity[0]]['max_url'] = user_url
+                                    entity_summary[entity[0]]['ranking'] = "Votre URL"
+
+                # Convertir les données des mots-clés en DataFrame
+                data = []
+                for kw, values in keyword_data.items():
+                    mean_top_3 = sum(values["occurrences"][:3]) / 3
+                    data.append([kw, values["total_occurrence"], values["max_occurrence"], values["max_url"], values["score"], values["ranking"], mean_top_3])
+                df = pd.DataFrame(data, columns=["Mot Yake", "Nombre d'occurrences total", "Nombre d'occurrences max", "URL avec Occurrence Max", "Score", "Ranking", "Moyenne d'occurrences sur le top 3"])
+
+                # Trier le DataFrame par nombre d'occurrences total (ordre descendant)
+                df = df.sort_values(by=["Nombre d'occurrences total"], ascending=False)
+
+                # Stocker les résultats dans st.session_state
+                st.session_state['df'] = df
+
+                # Afficher le tableau
+                st.subheader("Mots-clés YAKE extraits des résultats ValueSERP")
+                st.subheader("Pour rappel : The lower the score, the more relevant the keyword is.")
+                st.dataframe(df)
+
+                # Convertir le DataFrame en CSV
+                csv = convert_df_to_csv(df)
+
+                # Nom du fichier CSV
+                file_name = "mots_cles_yake_valueserp.csv"
+
+                # Bouton de téléchargement
+                st.download_button(
+                    label="Télécharger le tableau en CSV",
+                    data=csv,
+                    file_name=file_name,
+                    mime='text/csv',
+                )
+
+                # Convertir les données des topics en DataFrame
+                if topics_data:
+                    topics_df = pd.DataFrame(topics_data)
+                    st.subheader("Tableau des Topics TextRazor")
+                    st.dataframe(topics_df)
+
+                    # Convertir le DataFrame des topics en CSV
+                    topics_csv = convert_df_to_csv(topics_df)
+                    topics_file_name = "topics_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau des topics
+                    st.download_button(
+                        label="Télécharger le tableau des topics en CSV",
+                        data=topics_csv,
+                        file_name=topics_file_name,
+                        mime='text/csv',
+                    )
+
+                # Convertir les données des entités en DataFrame
+                if entities_data:
+                    entities_df = pd.DataFrame(entities_data)
+                    st.subheader("Tableau des Entités TextRazor par URL")
+                    st.dataframe(entities_df)
+
+                    # Convertir le DataFrame des entités en CSV
+                    entities_csv = convert_df_to_csv(entities_df)
+                    entities_file_name = "entities_textrazor_by_url.csv"
+
+                    # Bouton de téléchargement pour le tableau des entités
+                    st.download_button(
+                        label="Télécharger le tableau des entités par URL en CSV",
+                        data=entities_csv,
+                        file_name=entities_file_name,
+                        mime='text/csv',
+                    )
+
+                # Créer un tableau récapitulatif des entités
+                if entity_summary:
+                    summary_data = []
+                    for entity, values in entity_summary.items():
+                        summary_data.append({
+                            "Entité": entity,
+                            "Nombre d'occurrences total": values["total_occurrence"],
+                            "Nombre d'occurrences max": values["max_occurrence"],
+                            "URL ayant le plus d'occurrences": values["max_url"],
+                            "Ranking de l'URL": values["ranking"]
+                        })
+                    entity_summary_df = pd.DataFrame(summary_data)
+                    st.subheader("Tableau récapitulatif des Entités TextRazor")
+                    st.dataframe(entity_summary_df)
+
+                    # Convertir le DataFrame récapitulatif des entités en CSV
+                    entity_summary_csv = convert_df_to_csv(entity_summary_df)
+                    entity_summary_file_name = "entities_summary_textrazor.csv"
+
+                    # Bouton de téléchargement pour le tableau récapitulatif des entités
+                    st.download_button(
+                        label="Télécharger le tableau récapitulatif des entités en CSV",
+                        data=entity_summary_csv,
+                        file_name=entity_summary_file_name,
+                        mime='text/csv',
+                    )
+
+                # Afficher les mots-clés sous forme de liste à virgule
+                st.subheader("Mots-clés extraits (liste à virgule)")
+                st.write(", ".join(df["Mot Yake"].tolist()))
+
+            except requests.RequestException as e:
+                st.error(f"Erreur lors de la recherche avec ValueSERP : {e}")
